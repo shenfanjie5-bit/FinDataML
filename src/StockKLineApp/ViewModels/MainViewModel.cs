@@ -54,7 +54,8 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 Code = s.Code,
                 Name = s.Name,
-                Symbol = s.Symbol
+                Symbol = s.Symbol,
+                Bars = s.Bars
             }));
 
             Errors.Clear();
