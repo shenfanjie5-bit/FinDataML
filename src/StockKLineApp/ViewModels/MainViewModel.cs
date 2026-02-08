@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using StockKLineApp.Models;
 using StockKLineApp.Services;
 
 namespace StockKLineApp.ViewModels;
@@ -9,6 +10,7 @@ namespace StockKLineApp.ViewModels;
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly CsvStockImportService _importService = new();
+    private readonly StockDataCacheService _stockCache = new();
     private readonly List<StockListItemViewModel> _allStocks = [];
 
     [ObservableProperty]
@@ -17,23 +19,27 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string searchKeyword = string.Empty;
 
-    public MainViewModel()
-    {
-    }
+    [ObservableProperty]
+    private bool isImporting;
+
+    [ObservableProperty]
+    private int importProgress;
+
+    [ObservableProperty]
+    private string importProgressText = "等待导入";
 
     public ObservableCollection<StockListItemViewModel> Stocks { get; } = [];
 
     public ObservableCollection<string> Errors { get; } = [];
 
-    public event Action<StockListItemViewModel>? NavigateToStockRequested;
+    public ObservableCollection<string> Logs { get; } = [];
 
-    partial void OnSearchKeywordChanged(string value)
-    {
-        ApplyFilter();
-    }
+    public event Action<StockListItemViewModel, StockDataCacheService>? NavigateToStockRequested;
+
+    partial void OnSearchKeywordChanged(string value) => ApplyFilter();
 
     [RelayCommand]
-    private void OpenCsv()
+    private async Task OpenCsvAsync()
     {
         var dialog = new OpenFileDialog
         {
@@ -45,31 +51,55 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        IsImporting = true;
+        ImportProgress = 0;
+        ImportProgressText = "准备导入...";
+        StatusMessage = "正在导入 CSV，请稍候。";
+        Logs.Clear();
+
+        var progress = new Progress<ImportProgressInfo>(info =>
+        {
+            ImportProgress = info.Percent;
+            ImportProgressText = info.Message;
+        });
+
         try
         {
-            var result = _importService.Import(dialog.FileName);
+            var result = await Task.Run(() => _importService.Import(dialog.FileName, progress));
 
+            _stockCache.ReplaceWith(result.Stocks);
             _allStocks.Clear();
             _allStocks.AddRange(result.Stocks.Select(s => new StockListItemViewModel
             {
                 Code = s.Code,
                 Name = s.Name,
                 Symbol = s.Symbol,
-                Bars = s.Bars
+                CacheKey = StockDataCacheService.BuildKey(s.Code, s.Name),
+                BarCount = s.Bars.Count
             }));
 
             Errors.Clear();
             foreach (var error in result.Errors)
             {
-                Errors.Add(error.ToString());
+                var line = error.ToString();
+                Errors.Add(line);
+                Logs.Add($"[WARN] {line}");
             }
 
             ApplyFilter();
+            ImportProgress = 100;
+            ImportProgressText = "导入完成";
             StatusMessage = $"导入完成：股票 {result.Stocks.Count} 只，错误 {result.Errors.Count} 条，编码 {result.EncodingUsed}。";
+            Logs.Add($"[INFO] CSV 导入完成，股票缓存已更新。编码: {result.EncodingUsed}。");
         }
         catch (Exception ex)
         {
             StatusMessage = $"导入失败：{ex.Message}";
+            Logs.Add($"[ERROR] {ex}");
+        }
+        finally
+        {
+            IsImporting = false;
         }
     }
 
@@ -100,7 +130,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        NavigateToStockRequested?.Invoke(stock);
+        NavigateToStockRequested?.Invoke(stock, _stockCache);
     }
 
     private void ApplyFilter()

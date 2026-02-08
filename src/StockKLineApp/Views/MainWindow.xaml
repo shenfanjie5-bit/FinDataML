@@ -17,7 +17,11 @@
             </TextBox>
         </StackPanel>
 
-        <TextBlock DockPanel.Dock="Top" Margin="0,0,0,12" Text="{Binding StatusMessage}" />
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock Margin="0,0,0,6" Text="{Binding StatusMessage}" />
+            <ProgressBar Height="14" Minimum="0" Maximum="100" Value="{Binding ImportProgress}" />
+            <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="Gray" Text="{Binding ImportProgressText}" />
+        </StackPanel>
 
         <Grid>
             <Grid.ColumnDefinitions>
@@ -32,6 +36,7 @@
                         <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="*" />
                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" />
                         <DataGridTextColumn Header="Symbol" Binding="{Binding Symbol}" Width="*" />
+                        <DataGridTextColumn Header="K线数量" Binding="{Binding BarCount}" Width="*" />
                         <DataGridTemplateColumn Header="操作" Width="*">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
@@ -46,9 +51,21 @@
                 </DataGrid>
             </GroupBox>
 
-            <GroupBox Header="解析错误（已跳过）" Grid.Column="2">
-                <ListBox ItemsSource="{Binding Errors}" />
-            </GroupBox>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <GroupBox Header="解析错误（已跳过）" Grid.Row="0">
+                    <ListBox ItemsSource="{Binding Errors}" />
+                </GroupBox>
+
+                <GroupBox Header="日志" Grid.Row="2">
+                    <ListBox ItemsSource="{Binding Logs}" />
+                </GroupBox>
+            </Grid>
         </Grid>
     </DockPanel>
 </Window>
