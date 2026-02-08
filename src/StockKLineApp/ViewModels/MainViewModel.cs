@@ -1,46 +1,38 @@
 using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using StockKLineApp.Services;
 
 namespace StockKLineApp.ViewModels;
 
-public sealed class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject
 {
     private readonly CsvStockImportService _importService = new();
     private readonly List<StockListItemViewModel> _allStocks = [];
 
-    private string _statusMessage = "请选择 CSV 文件导入。";
-    private string _searchKeyword = string.Empty;
+    [ObservableProperty]
+    private string statusMessage = "请选择 CSV 文件导入。";
+
+    [ObservableProperty]
+    private string searchKeyword = string.Empty;
 
     public MainViewModel()
     {
-        OpenCsvCommand = new RelayCommand(OpenCsv);
     }
 
     public ObservableCollection<StockListItemViewModel> Stocks { get; } = [];
 
     public ObservableCollection<string> Errors { get; } = [];
 
-    public RelayCommand OpenCsvCommand { get; }
+    public event Action<StockListItemViewModel>? NavigateToStockRequested;
 
-    public string SearchKeyword
+    partial void OnSearchKeywordChanged(string value)
     {
-        get => _searchKeyword;
-        set
-        {
-            if (SetProperty(ref _searchKeyword, value))
-            {
-                ApplyFilter();
-            }
-        }
+        ApplyFilter();
     }
 
-    public string StatusMessage
-    {
-        get => _statusMessage;
-        private set => SetProperty(ref _statusMessage, value);
-    }
-
+    [RelayCommand]
     private void OpenCsv()
     {
         var dialog = new OpenFileDialog
@@ -80,20 +72,56 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private void SubmitSearch()
+    {
+        var matches = GetMatches(SearchKeyword);
+        if (matches.Count == 0)
+        {
+            StatusMessage = "未找到匹配股票，请尝试其他关键字。";
+            return;
+        }
+
+        if (matches.Count == 1)
+        {
+            OpenStock(matches[0]);
+            return;
+        }
+
+        StatusMessage = $"找到 {matches.Count} 条匹配，请从列表中点击目标股票。";
+    }
+
+    [RelayCommand]
+    private void OpenStock(StockListItemViewModel? stock)
+    {
+        if (stock is null)
+        {
+            return;
+        }
+
+        NavigateToStockRequested?.Invoke(stock);
+    }
+
     private void ApplyFilter()
     {
-        var keyword = SearchKeyword.Trim();
-
-        var filtered = string.IsNullOrWhiteSpace(keyword)
-            ? _allStocks
-            : _allStocks.Where(s =>
-                s.Code.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
-                s.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)).ToList();
+        var filtered = GetMatches(SearchKeyword);
 
         Stocks.Clear();
         foreach (var item in filtered)
         {
             Stocks.Add(item);
         }
+    }
+
+    private List<StockListItemViewModel> GetMatches(string? keyword)
+    {
+        var normalized = keyword?.Trim() ?? string.Empty;
+
+        return string.IsNullOrWhiteSpace(normalized)
+            ? [.. _allStocks]
+            : _allStocks.Where(s =>
+                s.Code.Contains(normalized, StringComparison.OrdinalIgnoreCase) ||
+                s.Name.Contains(normalized, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 }
