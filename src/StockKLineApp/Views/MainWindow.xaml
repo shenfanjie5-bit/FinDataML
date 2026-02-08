@@ -10,7 +10,11 @@
             <Button Content="打开 CSV" Width="120" Command="{Binding OpenCsvCommand}" />
             <TextBox Margin="12,0,0,0" Width="280"
                      VerticalContentAlignment="Center"
-                     Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}" />
+                     Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Enter" Command="{Binding SubmitSearchCommand}" />
+                </TextBox.InputBindings>
+            </TextBox>
         </StackPanel>
 
         <TextBlock DockPanel.Dock="Top" Margin="0,0,0,12" Text="{Binding StatusMessage}" />
@@ -28,6 +32,16 @@
                         <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="*" />
                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" />
                         <DataGridTextColumn Header="Symbol" Binding="{Binding Symbol}" Width="*" />
+                        <DataGridTemplateColumn Header="操作" Width="*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="查看"
+                                            Padding="8,2"
+                                            Command="{Binding DataContext.OpenStockCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>

@@ -7,6 +7,20 @@ public partial class MainWindow : System.Windows.Window
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new MainViewModel();
+
+        var viewModel = new MainViewModel();
+        viewModel.NavigateToStockRequested += NavigateToStockDetail;
+
+        DataContext = viewModel;
+    }
+
+    private void NavigateToStockDetail(StockListItemViewModel stock)
+    {
+        var detailWindow = new StockDetailWindow(stock)
+        {
+            Owner = this
+        };
+
+        detailWindow.Show();
     }
 }
