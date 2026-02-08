@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using System.Windows.Threading;
 using StockKLineApp.Models;
+using StockKLineApp.Services;
 using StockKLineApp.ViewModels;
 
 namespace StockKLineApp.Views;
@@ -6,15 +9,25 @@ namespace StockKLineApp.Views;
 public partial class StockDetailWindow : System.Windows.Window
 {
     private readonly StockDetailViewModel _viewModel;
-    private readonly List<ScottPlot.OHLC> _ohlcs;
+    private readonly DispatcherTimer _throttleTimer;
+    private int _pendingVisibleCount;
 
-    public StockDetailWindow(StockListItemViewModel stock)
+    public StockDetailWindow(StockListItemViewModel stock, StockDataCacheService cache)
     {
         InitializeComponent();
 
-        _viewModel = new StockDetailViewModel(stock);
+        _viewModel = new StockDetailViewModel(stock, cache);
         DataContext = _viewModel;
-        _ohlcs = _viewModel.Bars.Select(ToOhlc).ToList();
+
+        _throttleTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(100)
+        };
+        _throttleTimer.Tick += (_, _) =>
+        {
+            _throttleTimer.Stop();
+            RenderVisibleRange(_pendingVisibleCount);
+        };
 
         Loaded += (_, _) => InitializeChartAndRange();
     }
@@ -22,7 +35,6 @@ public partial class StockDetailWindow : System.Windows.Window
     private void InitializeChartAndRange()
     {
         CandlestickPlot.Plot.Clear();
-        CandlestickPlot.Plot.Add.Candlestick(_ohlcs);
         CandlestickPlot.Plot.Axes.DateTimeTicksBottom();
         CandlestickPlot.Plot.XLabel("日期");
         CandlestickPlot.Plot.YLabel("价格");
@@ -32,7 +44,8 @@ public partial class StockDetailWindow : System.Windows.Window
         RangeSlider.TickFrequency = Math.Max(1, maxWindowSize / 10.0);
         RangeSlider.Value = Math.Min(_viewModel.DefaultVisibleBarCount, maxWindowSize);
 
-        UpdateVisibleRange((int)RangeSlider.Value);
+        _pendingVisibleCount = (int)RangeSlider.Value;
+        RenderVisibleRange(_pendingVisibleCount);
     }
 
     private void RangeSlider_OnValueChanged(object sender, System.Windows.RoutedPropertyChangedEventArgs<double> e)
@@ -42,23 +55,33 @@ public partial class StockDetailWindow : System.Windows.Window
             return;
         }
 
-        var visibleCount = Math.Clamp((int)Math.Round(e.NewValue), 1, _viewModel.Bars.Count);
-        UpdateVisibleRange(visibleCount);
+        _pendingVisibleCount = Math.Clamp((int)Math.Round(e.NewValue), 1, _viewModel.Bars.Count);
+        _throttleTimer.Stop();
+        _throttleTimer.Start();
     }
 
-    private void UpdateVisibleRange(int visibleCount)
+    private void RenderVisibleRange(int visibleCount)
     {
+        var sw = Stopwatch.StartNew();
         var startIndex = Math.Max(0, _viewModel.Bars.Count - visibleCount);
-        var startDate = _viewModel.Bars[startIndex].Date;
-        var endDate = _viewModel.Bars[^1].Date;
+        var visibleBars = _viewModel.Bars.Skip(startIndex).Take(visibleCount).ToList();
+        var ohlcs = visibleBars.Select(ToOhlc).ToList();
 
-        var minX = startDate.ToDateTime(TimeOnly.MinValue).ToOADate();
-        var maxX = endDate.ToDateTime(TimeOnly.MinValue).AddDays(1).ToOADate();
+        var startDate = visibleBars[0].Date;
+        var endDate = visibleBars[^1].Date;
 
-        CandlestickPlot.Plot.Axes.SetLimitsX(minX, maxX);
+        CandlestickPlot.Plot.Clear();
+        CandlestickPlot.Plot.Add.Candlestick(ohlcs);
+        CandlestickPlot.Plot.Axes.DateTimeTicksBottom();
+        CandlestickPlot.Plot.XLabel("日期");
+        CandlestickPlot.Plot.YLabel("价格");
         CandlestickPlot.Plot.Title($"{_viewModel.CodeLabel} K 线图（最近 {visibleCount} 根）");
+
         RangeLabel.Text = $"当前区间：{startDate:yyyy-MM-dd} ~ {endDate:yyyy-MM-dd}";
+
         CandlestickPlot.Refresh();
+        sw.Stop();
+        RenderCostLabel.Text = $"渲染耗时：{sw.ElapsedMilliseconds} ms（节流 100ms）";
     }
 
     private static ScottPlot.OHLC ToOhlc(DailyBar bar)
@@ -70,12 +93,12 @@ public partial class StockDetailWindow : System.Windows.Window
 
 public sealed class StockDetailViewModel
 {
-    public StockDetailViewModel(StockListItemViewModel stock)
+    public StockDetailViewModel(StockListItemViewModel stock, StockDataCacheService cache)
     {
         CodeLabel = $"代码：{stock.Code}";
         NameLabel = $"名称：{stock.Name}";
         SymbolLabel = $"Symbol：{stock.Symbol}";
-        Bars = stock.Bars.ToList();
+        Bars = cache.GetBars(stock.CacheKey);
     }
 
     public const int DefaultBarCount = 200;

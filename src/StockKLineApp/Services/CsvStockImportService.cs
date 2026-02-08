@@ -21,19 +21,23 @@ public sealed class CsvStockImportService
         ["Volume"] = ["总手", "volume"]
     };
 
-    public CsvImportResult Import(string path)
+    public CsvImportResult Import(string path, IProgress<ImportProgressInfo>? progress = null)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
+        progress?.Report(new ImportProgressInfo { Percent = 0, Message = "开始解析 UTF-8..." });
+
         var errors = new List<CsvValidationError>();
-        var data = TryImport(path, new UTF8Encoding(false, true), "UTF-8", errors);
+        var data = TryImport(path, new UTF8Encoding(false, true), "UTF-8", errors, progress);
         if (data is not null)
         {
             return data;
         }
 
+        progress?.Report(new ImportProgressInfo { Percent = 0, Message = "UTF-8 失败，尝试 GBK..." });
+
         errors.Clear();
-        data = TryImport(path, Encoding.GetEncoding("GBK"), "GBK", errors);
+        data = TryImport(path, Encoding.GetEncoding("GBK"), "GBK", errors, progress);
         if (data is null)
         {
             throw new InvalidOperationException("无法解析 CSV 文件，请确认编码和数据格式。");
@@ -42,10 +46,12 @@ public sealed class CsvStockImportService
         return data;
     }
 
-    private static CsvImportResult? TryImport(string path, Encoding encoding, string encodingName, List<CsvValidationError> errors)
+    private static CsvImportResult? TryImport(string path, Encoding encoding, string encodingName, List<CsvValidationError> errors, IProgress<ImportProgressInfo>? progress)
     {
         try
         {
+            var totalRows = Math.Max(1, File.ReadLines(path, encoding).Skip(1).Count());
+
             using var reader = new StreamReader(path, encoding, detectEncodingFromByteOrderMarks: true);
             using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
             {
@@ -72,6 +78,13 @@ public sealed class CsvStockImportService
             while (csv.Read())
             {
                 var row = csv.Parser.Row;
+                var parsedRowIndex = Math.Max(1, row - 1);
+
+                if (parsedRowIndex % 200 == 0)
+                {
+                    var percent = Math.Clamp((int)Math.Round(parsedRowIndex * 100.0 / totalRows), 0, 99);
+                    progress?.Report(new ImportProgressInfo { Percent = percent, Message = $"解析中... {parsedRowIndex}/{totalRows}" });
+                }
 
                 if (!TryGetRequiredString(csv, header, columnMap, "Code", row, errors, out var code) ||
                     !TryGetRequiredString(csv, header, columnMap, "Name", row, errors, out var name) ||

@@ -1,3 +1,4 @@
+using StockKLineApp.Services;
 using StockKLineApp.ViewModels;
 
 namespace StockKLineApp.Views;
@@ -14,9 +15,9 @@ public partial class MainWindow : System.Windows.Window
         DataContext = viewModel;
     }
 
-    private void NavigateToStockDetail(StockListItemViewModel stock)
+    private void NavigateToStockDetail(StockListItemViewModel stock, StockDataCacheService cache)
     {
-        var detailWindow = new StockDetailWindow(stock)
+        var detailWindow = new StockDetailWindow(stock, cache)
         {
             Owner = this
         };
