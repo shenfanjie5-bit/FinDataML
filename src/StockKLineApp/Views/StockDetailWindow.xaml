@@ -11,12 +11,28 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock Text="股票详情" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
         <TextBlock Grid.Row="1" Text="{Binding CodeLabel}" Margin="0,0,0,8" FontSize="14" />
         <TextBlock Grid.Row="2" Text="{Binding NameLabel}" Margin="0,0,0,8" FontSize="14" />
         <TextBlock Grid.Row="3" Text="{Binding SymbolLabel}" Margin="0,0,0,8" FontSize="14" />
-        <ScottPlot:WpfPlot Grid.Row="4" x:Name="CandlestickPlot" />
+        <ScottPlot:WpfPlot Grid.Row="4" x:Name="CandlestickPlot" Margin="0,0,0,12" />
+
+        <TextBlock Grid.Row="5"
+                   x:Name="RangeLabel"
+                   FontSize="13"
+                   Margin="0,0,0,8" />
+
+        <StackPanel Grid.Row="6" Orientation="Vertical">
+            <TextBlock Text="时间范围（最近天数）" FontSize="12" Margin="0,0,0,4" />
+            <Slider x:Name="RangeSlider"
+                    Minimum="0"
+                    TickPlacement="BottomRight"
+                    IsSnapToTickEnabled="True"
+                    ValueChanged="RangeSlider_OnValueChanged" />
+        </StackPanel>
     </Grid>
 </Window>
