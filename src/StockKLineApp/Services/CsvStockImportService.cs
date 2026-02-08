@@ -18,7 +18,7 @@ public sealed class CsvStockImportService
         ["Close"] = ["今末", "close"],
         ["High"] = ["最高", "high"],
         ["Low"] = ["最低", "low"],
-        ["Volume"] = ["总手", "volume"]
+        ["TurnoverWan"] = ["成交额", "turnover", "amount"]
     };
 
     public CsvImportResult Import(string path, IProgress<ImportProgressInfo>? progress = null)
@@ -98,7 +98,7 @@ public sealed class CsvStockImportService
                     continue;
                 }
 
-                _ = TryGetNullableLong(csv, header, columnMap, "Volume", row, errors, out var volume);
+                _ = TryGetNullableTurnoverWan(csv, header, columnMap, "TurnoverWan", row, errors, out var turnoverWan);
 
                 var key = $"{code}|{name}";
                 if (!grouped.TryGetValue(key, out var series))
@@ -114,7 +114,7 @@ public sealed class CsvStockImportService
                     Close = close,
                     High = high,
                     Low = low,
-                    Volume = volume
+                    TurnoverWan = turnoverWan
                 });
             }
 
@@ -216,7 +216,7 @@ public sealed class CsvStockImportService
         return false;
     }
 
-    private static bool TryGetNullableLong(CsvReader csv, string[] header, Dictionary<string, int> map, string canonical, int row, List<CsvValidationError> errors, out long? value)
+    private static bool TryGetNullableTurnoverWan(CsvReader csv, string[] header, Dictionary<string, int> map, string canonical, int row, List<CsvValidationError> errors, out decimal? value)
     {
         value = null;
         if (!TryGetRaw(csv, header, map, canonical, out var raw, out var idx, out var name))
@@ -229,14 +229,20 @@ public sealed class CsvStockImportService
             return true;
         }
 
-        if (long.TryParse(raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        if (!decimal.TryParse(raw.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
         {
-            value = parsed;
-            return true;
+            errors.Add(new CsvValidationError { Row = row, ColumnName = name, ColumnIndex = idx + 1, RawValue = raw, Reason = "无法解析为 decimal。" });
+            return false;
         }
 
-        errors.Add(new CsvValidationError { Row = row, ColumnName = name, ColumnIndex = idx + 1, RawValue = raw, Reason = "无法解析为 long。" });
-        return false;
+        if (decimal.Round(parsed, 6) != parsed)
+        {
+            errors.Add(new CsvValidationError { Row = row, ColumnName = name, ColumnIndex = idx + 1, RawValue = raw, Reason = "最多支持 6 位小数。" });
+            return false;
+        }
+
+        value = parsed;
+        return true;
     }
 
     private static bool TryGetRaw(CsvReader csv, string[] header, Dictionary<string, int> map, string canonical, out string value, out int index, out string columnName)
