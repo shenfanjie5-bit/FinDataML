@@ -7,5 +7,5 @@ public sealed class DailyBar
     public decimal Close { get; init; }
     public decimal High { get; init; }
     public decimal Low { get; init; }
-    public long? Volume { get; init; }
+    public decimal? TurnoverWan { get; init; }
 }
